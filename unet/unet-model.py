@@ -131,6 +131,7 @@ class UNet(nn.Module):
         x4 = self.down3(x3)
         if self.half_model:
             x = self.avgpool(x4)
+            x = torch.flatten(x, 1)
             logits = self.fc(x)
         else:
             x = self.up1(x4, x3)
