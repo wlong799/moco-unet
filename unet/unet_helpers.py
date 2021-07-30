@@ -229,7 +229,7 @@ def random_rotate_and_resize(X, Y, landmarks=None, scale_range=1., xy=(300,300),
         
         if flip and do_flip:
             imgi[n] = np.flip(imgi[n], axis=-1)
-            lbl[n] =  np.flip(lbl[n], axis=-1)
+            lbl[n] = np.flip(lbl[n], axis=-1)
 
         for k in range(nchan):
             I = cv2.warpAffine(imgi[n][k], M, (xy[1],xy[0]), flags=cv2.INTER_LINEAR)
