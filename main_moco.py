@@ -25,6 +25,10 @@ import torchvision.models as models
 import moco.loader
 import moco.builder
 
+from unet import UNet
+
+# Small hack to make our half UNet model accessible to MoCo
+models.__dict__['unet_half'] = lambda num_classes=None: UNet(1, num_classes, half_model=True)
 model_names = sorted(name for name in models.__dict__
                      if name.islower() and not name.startswith("__")
                      and callable(models.__dict__[name]))
@@ -32,11 +36,11 @@ model_names = sorted(name for name in models.__dict__
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
 parser.add_argument('data', metavar='DIR',
                     help='path to dataset')
-parser.add_argument('-a', '--arch', metavar='ARCH', default='resnet50',
+parser.add_argument('-a', '--arch', metavar='ARCH', default='unet_half',
                     choices=model_names,
                     help='model architecture: ' +
                          ' | '.join(model_names) +
-                         ' (default: resnet50)')
+                         ' (default: unet_half)')
 parser.add_argument('-j', '--workers', default=32, type=int, metavar='N',
                     help='number of data loading workers (default: 32)')
 parser.add_argument('--epochs', default=200, type=int, metavar='N',
@@ -88,12 +92,8 @@ parser.add_argument('--moco-m', default=0.999, type=float,
                     help='moco momentum of updating key encoder (default: 0.999)')
 parser.add_argument('--moco-t', default=0.07, type=float,
                     help='softmax temperature (default: 0.07)')
-
-# options for moco v2
 parser.add_argument('--mlp', action='store_true',
                     help='use mlp head')
-parser.add_argument('--aug-plus', action='store_true',
-                    help='use moco v2 data augmentation')
 parser.add_argument('--cos', action='store_true',
                     help='use cosine lr schedule')
 
@@ -219,31 +219,20 @@ def main_worker(gpu, ngpus_per_node, args):
 
     # Data loading code
     traindir = os.path.join(args.data, 'train')
-    normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                     std=[0.229, 0.224, 0.225])
-    if args.aug_plus:
-        # MoCo v2's aug: similar to SimCLR https://arxiv.org/abs/2002.05709
-        augmentation = [
-            transforms.RandomResizedCrop(224, scale=(0.2, 1.)),
-            transforms.RandomApply([
-                transforms.ColorJitter(0.4, 0.4, 0.4, 0.1)  # not strengthened
-            ], p=0.8),
-            transforms.RandomGrayscale(p=0.2),
-            transforms.RandomApply([moco.loader.GaussianBlur([.1, 2.])], p=0.5),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            normalize
-        ]
-    else:
-        # MoCo v1's aug: the same as InstDisc https://arxiv.org/abs/1805.01978
-        augmentation = [
-            transforms.RandomResizedCrop(224, scale=(0.2, 1.)),
-            transforms.RandomGrayscale(p=0.2),
-            transforms.ColorJitter(0.4, 0.4, 0.4, 0.4),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            normalize
-        ]
+    # MoCo v2's aug: similar to SimCLR https://arxiv.org/abs/2002.05709
+    # Changes for our data: all grayscale, no color-jittering, different normalization
+    # Mean and SD calculated by running the below code on 1000 mouse images
+    nchannels = 1 if args.arch == 'unet_half' else 3
+    downsize_factor = 2 if args.arch == 'unet_half' else 1
+    augmentation = [
+        transforms.Grayscale(nchannels),
+        transforms.Resize(256 // downsize_factor),
+        transforms.RandomResizedCrop(224 // downsize_factor, scale=(0.2, 1.)),
+        transforms.RandomApply([transforms.GaussianBlur(5, sigma=(.1, 2.))], p=0.5),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=0.2818, std=0.2170)
+    ]
 
     train_dataset = datasets.ImageFolder(
         traindir,
@@ -307,8 +296,8 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
         # measure accuracy and record loss
         acc1, acc5 = accuracy(output, target, topk=(1, 5))
         losses.update(loss.item(), images[0].size(0))
-        top1.update(acc1[0], images[0].size(0))
-        top5.update(acc5[0], images[0].size(0))
+        top1.update(acc1, images[0].size(0))
+        top5.update(acc5, images[0].size(0))
 
         # compute gradient and do SGD step
         optimizer.zero_grad()
@@ -319,8 +308,9 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
         batch_time.update(time.time() - end)
         end = time.time()
 
-        if i % args.print_freq == 0:
-            progress.display(i)
+        # if i % args.print_freq == 0:
+        #     progress.display(i)
+    progress.display(i)
 
 
 def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
@@ -395,8 +385,8 @@ def accuracy(output, target, topk=(1,)):
 
         res = []
         for k in topk:
-            correct_k = correct[:k].view(-1).float().sum(0, keepdim=True)
-            res.append(correct_k.mul_(100.0 / batch_size))
+            correct_k = correct[:k].float().sum()
+            res.append(correct_k * (100.0 / batch_size))
         return res
 
 
