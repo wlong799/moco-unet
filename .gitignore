@@ -1,4 +1,5 @@
 git*
+*.yml
 .idea
 __pycache__/
 checkpoints/
