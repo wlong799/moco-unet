@@ -22,10 +22,12 @@ parser.add_argument('-b', '--batch-size', default=256, type=int,
                     help='mini-batch size (default: 256), this is the total '
                          'batch size of all GPUs on the current node when '
                          'using Data Parallel or Distributed Data Parallel')
-parser.add_argument('--lr', '--learning-rate', default=30., type=float,
+parser.add_argument('--lr', '--learning-rate', default=0.03, type=float,
                     metavar='LR', help='initial learning rate', dest='lr')
 parser.add_argument('--channels', default=128, type=int, metavar='N',
                     help='number of channels in first convolutional layer')
+parser.add_argument('--pretrained', default='', type=str,
+                    help='path to moco pretrained checkpoint')
 
 args = parser.parse_args()
 
@@ -74,6 +76,38 @@ utils.set_seed(seed)
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Instantiate network ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 net = UNet(1, train_dataset.nlandmarks)
+for name, param in net.named_parameters():
+    if not (name.startswith('up') or name.startswith('outc')):
+        param.requires_grad = False
+
+# load from pre-trained, before DistributedDataParallel constructor
+if args.pretrained:
+    if os.path.isfile(args.pretrained):
+        print("=> loading checkpoint '{}'".format(args.pretrained))
+        checkpoint = torch.load(args.pretrained, map_location="cpu")
+
+        # rename moco pre-trained keys
+        state_dict = checkpoint['state_dict']
+        for k in list(state_dict.keys()):
+            # retain only encoder_q up to before the embedding layer
+            if k.startswith('module.encoder_q') and not k.startswith('module.encoder_q.fc'):
+                # remove prefix
+                state_dict[k[len("module.encoder_q."):]] = state_dict[k]
+            # delete renamed or unused k
+            del state_dict[k]
+
+        args.start_epoch = 0
+        msg = net.load_state_dict(state_dict, strict=False)
+        # verify that missing data is only from second half of model
+        for key in msg.missing_keys:
+            if key.startswith('up') or key.startswith('outc'):
+                continue
+            raise Exception(f"'{key}' was not found in pretrained model")
+
+        print("=> loaded pre-trained model '{}'".format(args.pretrained))
+    else:
+        print("=> no checkpoint found at '{}'".format(args.pretrained))
+
 net.to(device=device)
 
 # set learning rate schedule
@@ -88,7 +122,8 @@ else:
     LR = np.append(LR, learning_rate * np.ones(max(0, epochs - 10)))
 
 # gradient descent flavor
-optimizer = torch.optim.Adam(net.parameters(), lr=learning_rate, weight_decay=weight_decay)
+parameters = list(filter(lambda p: p.requires_grad, net.parameters()))
+optimizer = torch.optim.Adam(parameters, lr=learning_rate, weight_decay=weight_decay)
 lrs = []
 criterion = nn.BCEWithLogitsLoss()
 

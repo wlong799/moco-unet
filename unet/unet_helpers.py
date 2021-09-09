@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import torch
+import torchvision.transforms
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -505,7 +506,7 @@ class COCODataset(torch.utils.data.Dataset):
             else:
                 print('Cannot handle im type ' + str(im.dtype))
                 raise TypeError
-            im = self.normalize99(im)  # Normalize images
+            # im = self.normalize99(im)  # Normalize images
             if im.ndim < 3:
                 self.im.append(im[np.newaxis, ...])
 
@@ -555,6 +556,9 @@ class COCODataset(torch.utils.data.Dataset):
         im = torch.tensor(np.squeeze(im, axis=0), dtype=torch.float32)
         lm_heatmap = torch.tensor(np.squeeze(lm_heatmap, axis=0), dtype=torch.float32)
         lm = torch.tensor(np.squeeze(lm, axis=0), dtype=torch.float32)
+        im = torchvision.transforms.Resize(112)(im)
+        im = torchvision.transforms.Normalize(mean=0.2818, std=0.2170)(im)
+        lm_heatmap = torchvision.transforms.Resize(112)(lm_heatmap)
 
         locref_map = torch.tensor(self.locref_map[item], dtype=torch.float32)
         lowres_locref_map = torch.tensor(self.lowres_locref_map[item], dtype=torch.float32)
