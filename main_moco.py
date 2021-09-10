@@ -30,26 +30,25 @@ parser.add_argument('-j', '--workers', default=32, type=int, metavar='N',
                     help='number of data loading workers (default: 32)')
 parser.add_argument('-b', '--batch-size', default=256, type=int,
                     metavar='N',
-                    help='mini-batch size (default: 256), this is the total '
-                         'batch size of all GPUs on the current node when '
-                         'using Data Parallel or Distributed Data Parallel')
+                    help='total mini-batch size across GPUs (default: 256)')
 parser.add_argument('--epochs', default=200, type=int, metavar='N',
                     help='number of total epochs to run (default: 200)')
 parser.add_argument('--lr', '--learning-rate', default=0.03, type=float,
-                    metavar='LR', help='initial learning rate', dest='lr')
+                    metavar='LR', dest='lr',
+                    help='initial learning rate (default: 0.03)')
 parser.add_argument('--schedule', default=[120, 160], nargs='*', type=int,
-                    help='learning rate schedule (when to drop lr by 10x)')
+                    help='learning rate 10x drop schedule (default: [120, 160])')
 parser.add_argument('--momentum', default=0.9, type=float, metavar='M',
-                    help='momentum of SGD solver')
+                    help='momentum of SGD solver (default: 0.9)')
 parser.add_argument('--wd', '--weight-decay', default=1e-4, type=float,
-                    metavar='W', help='weight decay (default: 1e-4)',
-                    dest='weight_decay')
-parser.add_argument('--dist-url', default='tcp://localhost:10001', type=str,
-                    help='url used to set up distributed training')
+                    metavar='W', dest='weight_decay',
+                    help='weight decay (default: 1e-4)')
+parser.add_argument('--port', default=10001, type=int,
+                    help='port used to set up distributed training (default: 10001)')
 parser.add_argument('--resume', default='', type=str, metavar='PATH',
-                    help='path to latest checkpoint (default: none)')
+                    help='path to resume from checkpoint')
 parser.add_argument('--seed', default=None, type=int,
-                    help='seed for initializing training. ')
+                    help='seed for initializing training')
 
 # MoCo specific configs:
 parser.add_argument('--moco-dim', default=128, type=int,
@@ -93,8 +92,8 @@ def main_worker(gpu, num_gpus, args):
 
         builtins.print = print_pass
 
-    dist.init_process_group(backend=DIST_BACKEND, init_method=args.dist_url,
-                            world_size=num_gpus, rank=gpu)
+    dist_url = f'tcp://localhost:{args.port}'
+    dist.init_process_group(backend=DIST_BACKEND, init_method=dist_url, world_size=num_gpus, rank=gpu)
     # create model
     print("=> creating half-UNet model'")
     model = moco.builder.MoCo(args.moco_dim, args.moco_k, args.moco_m, args.moco_t, args.mlp)
