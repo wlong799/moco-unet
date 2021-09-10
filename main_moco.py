@@ -24,8 +24,10 @@ import moco.loader
 DIST_BACKEND = 'nccl'
 
 parser = argparse.ArgumentParser(description='PyTorch MoCo Training')
-parser.add_argument('data', metavar='DIR',
+parser.add_argument('data', metavar='DATA_DIR',
                     help='path to dataset')
+parser.add_argument('checkpoints', metavar='SAVE_DIR',
+                    help='where to save checkpoints')
 parser.add_argument('-j', '--workers', default=32, type=int, metavar='N',
                     help='number of data loading workers (default: 32)')
 parser.add_argument('-b', '--batch-size', default=256, type=int,
@@ -45,6 +47,9 @@ parser.add_argument('--wd', '--weight-decay', default=1e-4, type=float,
                     help='weight decay (default: 1e-4)')
 parser.add_argument('--port', default=10001, type=int,
                     help='port used to set up distributed training (default: 10001)')
+parser.add_argument('--save-freq', default=25, type=int,
+                    metavar='FREQ', dest='save_freq',
+                    help='frequency in epochs to save checkpoints (default: 25)'),
 parser.add_argument('--resume', default='', type=str, metavar='PATH',
                     help='path to resume from checkpoint')
 parser.add_argument('--seed', default=None, type=int,
@@ -77,6 +82,8 @@ def main():
                       'which can slow down your training considerably! '
                       'You may see unexpected behavior when restarting '
                       'from checkpoints.')
+
+    os.makedirs(args.checkpoints, exist_ok=True)
 
     num_gpus = torch.cuda.device_count()
     # Use torch.multiprocessing.spawn to launch distributed processes: the
@@ -166,12 +173,13 @@ def main_worker(gpu, num_gpus, args):
         # train for one epoch
         train(train_loader, model, criterion, optimizer, epoch, gpu)
 
-        if gpu == 0:
+        if gpu == 0 and (epoch + 1) % args.save_freq == 0:
+            filename = os.path.join(args.checkpoints, f'checkpoint_{epoch+1:04d}.pth.tar')
             torch.save({
                 'epoch': epoch + 1,
                 'state_dict': model.state_dict(),
                 'optimizer': optimizer.state_dict(),
-            }, 'checkpoint_{:04d}.pth.tar'.format(epoch))
+            }, filename)
 
 
 def train(train_loader, model, criterion, optimizer, epoch, gpu):
