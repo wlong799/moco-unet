@@ -142,23 +142,14 @@ def main_worker(gpu, num_gpus, args):
 
     cudnn.benchmark = True
 
-    # Data loading code
-    # MoCo v2's aug: similar to SimCLR https://arxiv.org/abs/2002.05709
-    # Changes for our data: all grayscale, no color-jitter, different normalization
-    # Mean and SD calculated by running the below code on 1000 mouse images
-    augmentation = [
+    base_transform = transforms.Compose([
+        transforms.Resize(256),
         transforms.Grayscale(1),
-        transforms.Resize(128),
-        transforms.RandomResizedCrop(112, scale=(0.2, 1.)),
-        transforms.RandomApply([transforms.GaussianBlur(5, sigma=(.1, 2.))], p=0.5),
         transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=0.2818, std=0.2170)
-    ]
-
-    train_dataset = datasets.ImageFolder(
-        args.data,
-        moco.loader.TwoCropsTransform(transforms.Compose(augmentation)))
+        transforms.RandomAffine(degrees=45, scale=(0.5, 2)),
+        transforms.ToTensor()
+        ])
+    train_dataset = datasets.ImageFolder(args.data, moco.loader.TwoCropsTransform(base_transform))
 
     train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
 
@@ -174,7 +165,7 @@ def main_worker(gpu, num_gpus, args):
         train(train_loader, model, criterion, optimizer, epoch, gpu)
 
         if gpu == 0 and (epoch + 1) % args.save_freq == 0:
-            filename = os.path.join(args.checkpoints, f'checkpoint_{epoch+1:04d}.pth.tar')
+            filename = os.path.join(args.checkpoints, f'checkpoint_{epoch + 1:04d}.pth.tar')
             torch.save({
                 'epoch': epoch + 1,
                 'state_dict': model.state_dict(),
@@ -233,6 +224,10 @@ class AverageMeter(object):
     def __init__(self, name, fmt=':f'):
         self.name = name
         self.fmt = fmt
+        self.val = 0
+        self.avg = 0
+        self.sum = 0
+        self.count = 0
         self.reset()
 
     def reset(self):
@@ -263,7 +258,8 @@ class ProgressMeter(object):
         entries += [str(meter) for meter in self.meters]
         print('\t'.join(entries))
 
-    def _get_batch_fmtstr(self, num_batches):
+    @staticmethod
+    def _get_batch_fmtstr(num_batches):
         num_digits = len(str(num_batches // 1))
         fmt = '{:' + str(num_digits) + 'd}'
         return '[' + fmt + '/' + fmt.format(num_batches) + ']'
