@@ -3,6 +3,7 @@ import builtins
 import math
 import os
 import random
+import socket
 import time
 import warnings
 
@@ -21,6 +22,7 @@ import torchvision.transforms as transforms
 import moco.builder
 import moco.loader
 
+CONNECT_ATTEMPTS = 100
 DIST_BACKEND = 'nccl'
 
 parser = argparse.ArgumentParser(description='PyTorch MoCo Training')
@@ -72,7 +74,6 @@ parser.add_argument('--cos', action='store_true',
 
 def main():
     args = parser.parse_args()
-
     if args.seed is not None:
         random.seed(args.seed)
         torch.manual_seed(args.seed)
@@ -84,10 +85,14 @@ def main():
                       'from checkpoints.')
 
     os.makedirs(args.checkpoints, exist_ok=True)
-
     num_gpus = torch.cuda.device_count()
-    # Use torch.multiprocessing.spawn to launch distributed processes: the
-    # main_worker process function
+
+    attempts = 0
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        while s.connect_ex(('localhost', args.port)) == 0 and attempts < CONNECT_ATTEMPTS:
+            args.port += 1
+            attempts += 1
+
     mp.spawn(main_worker, nprocs=num_gpus, args=(num_gpus, args))
 
 
@@ -148,7 +153,7 @@ def main_worker(gpu, num_gpus, args):
         transforms.RandomHorizontalFlip(),
         transforms.RandomAffine(degrees=45, scale=(0.5, 2)),
         transforms.ToTensor()
-        ])
+    ])
     train_dataset = datasets.ImageFolder(args.data, moco.loader.TwoCropsTransform(base_transform))
 
     train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
