@@ -13,20 +13,21 @@ import unet.unet_helpers as utils
 from unet import UNet
 
 parser = argparse.ArgumentParser(description='PyTorch UNet Pose Estimation')
-parser.add_argument('data', metavar='DATA_DIR', help='path to dataset')
-parser.add_argument('aug_file', metavar='AUG_FILE', help='path to augmentations file')
+parser.add_argument('data', metavar='DATA_DIR',
+                    help='path to dataset')
+parser.add_argument('checkpoints', metavar='SAVE_DIR',
+                    help='where to save checkpoints')
+parser.add_argument('aug_file', metavar='AUG_FILE',
+                    help='path to augmentations file')
+parser.add_argument('-b', '--batch-size', default=256, type=int, metavar='N',
+                    help='total mini-batch size across GPUs (default: 256)')
 parser.add_argument('--epochs', default=100, type=int, metavar='N',
-                    help='number of total epochs to run')
-parser.add_argument('-b', '--batch-size', default=256, type=int,
-                    metavar='N',
-                    help='mini-batch size (default: 256), this is the total '
-                         'batch size of all GPUs on the current node when '
-                         'using Data Parallel or Distributed Data Parallel')
-parser.add_argument('--lr', '--learning-rate', default=0.03, type=float,
-                    metavar='LR', help='initial learning rate', dest='lr')
+                    help='number of total epochs to run (default: 100)')
+parser.add_argument('--lr', '--learning-rate', default=0.03, type=float, metavar='LR', dest='lr',
+                    help='initial learning rate (default: 0.03)')
 parser.add_argument('--channels', default=128, type=int, metavar='N',
-                    help='number of channels in first convolutional layer')
-parser.add_argument('--pretrained', default='', type=str,
+                    help='number of channels in first convolutional layer (default: 128)')
+parser.add_argument('--pretrained', default='', type=str, metavar='PATH',
                     help='path to moco pretrained checkpoint')
 
 args = parser.parse_args()
@@ -47,11 +48,8 @@ cam = train_dir.split("/")[-2]
 print("Train and test on images from:", cam)
 print("device:", device)
 
-model_name = "UNet_{c}_{lr}_{bs}_{ep}_{ch}".format(c=cam, lr=lr_init, bs=batch_size, ep=epochs, ch=channels)
-print("model name:", model_name)
-unet_dir = os.path.join(os.getcwd(), "checkpoints/" + model_name)
-if not os.path.isdir(unet_dir):
-    os.mkdir(unet_dir)
+unet_dir = args.checkpoints
+os.makedirs(unet_dir, exist_ok=True)
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~ Get augmentation params ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 with open(aug_file, "r") as f:
@@ -76,16 +74,12 @@ utils.set_seed(seed)
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Instantiate network ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 net = UNet(1, train_dataset.nlandmarks)
-for name, param in net.named_parameters():
-    if not (name.startswith('up') or name.startswith('outc')):
-        param.requires_grad = False
 
-# load from pre-trained, before DistributedDataParallel constructor
+# load from pre-trained moco file
 if args.pretrained:
     if os.path.isfile(args.pretrained):
-        print("=> loading checkpoint '{}'".format(args.pretrained))
+        print("loading checkpoint '{}'".format(args.pretrained))
         checkpoint = torch.load(args.pretrained, map_location="cpu")
-
         # rename moco pre-trained keys
         state_dict = checkpoint['state_dict']
         for k in list(state_dict.keys()):
@@ -95,7 +89,6 @@ if args.pretrained:
                 state_dict[k[len("module.encoder_q."):]] = state_dict[k]
             # delete renamed or unused k
             del state_dict[k]
-
         args.start_epoch = 0
         msg = net.load_state_dict(state_dict, strict=False)
         # verify that missing data is only from second half of model
@@ -103,13 +96,11 @@ if args.pretrained:
             if key.startswith('up') or key.startswith('outc'):
                 continue
             raise Exception(f"'{key}' was not found in pretrained model")
-
-        print("=> loaded pre-trained model '{}'".format(args.pretrained))
+        print("loaded pre-trained model '{}'".format(args.pretrained))
     else:
-        print("=> no checkpoint found at '{}'".format(args.pretrained))
+        print("no checkpoint found at '{}'".format(args.pretrained))
 
 net.to(device=device)
-
 # set learning rate schedule
 lr_decay = 1.5
 step_size = 10
@@ -193,7 +184,8 @@ for f in folders:
     pred_df = utils.analyze_frames(f, bodyparts, aug_params['scorer'], net,
                                    (aug_params['img_x'], aug_params['img_y']))
 
-    pred_df.to_hdf(os.path.join(unet_dir, f.split("/")[-1] + "_" + model_name + ".h5"), "df_with_missing",
+    pred_df.to_hdf(os.path.join(unet_dir, f.split("/")[-1] + ".h5"),
+                   "df_with_missing",
                    format="table", mode="w")
 inference_time = time.time() - t2
 print("Test frames prediction saved in", unet_dir)

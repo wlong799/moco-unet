@@ -297,7 +297,7 @@ def analyze_frames(frames_dir, bodyparts, scorer, net, img_xy):
             raise TypeError
         # im = resize(im, img_xy, anti_aliasing=False)
         im = torch.Tensor(im[np.newaxis, np.newaxis, :, :])
-        pred = net.output(im.to(device=device, dtype=torch.float32))
+        pred = torch.sigmoid(net(im.to(device=device, dtype=torch.float32)))
         landmarks = heatmap2landmarks(pred.cpu().detach().numpy()).ravel()
         dataFrame.iloc[ind] = landmarks
     return dataFrame
@@ -496,6 +496,7 @@ class COCODataset(torch.utils.data.Dataset):
         self.im = []
         for file in self.img_files:
             im = cv2.imread(file, cv2.IMREAD_GRAYSCALE)
+            im = cv2.resize(im, img_xy, cv2.INTER_AREA)
             # convert to float32 in the range 0. to 1.
             if im.dtype == float:
                 pass
