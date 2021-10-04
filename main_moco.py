@@ -32,13 +32,11 @@ parser.add_argument('checkpoints', metavar='SAVE_DIR',
                     help='where to save checkpoints')
 parser.add_argument('-j', '--workers', default=32, type=int, metavar='N',
                     help='number of data loading workers (default: 32)')
-parser.add_argument('-b', '--batch-size', default=256, type=int,
-                    metavar='N',
+parser.add_argument('-b', '--batch-size', default=256, type=int, metavar='N',
                     help='total mini-batch size across GPUs (default: 256)')
 parser.add_argument('--epochs', default=200, type=int, metavar='N',
                     help='number of total epochs to run (default: 200)')
-parser.add_argument('--lr', '--learning-rate', default=0.03, type=float,
-                    metavar='LR', dest='lr',
+parser.add_argument('--lr', '--learning-rate', default=0.03, type=float, metavar='LR', dest='lr',
                     help='initial learning rate (default: 0.03)')
 parser.add_argument('--schedule', default=[120, 160], nargs='*', type=int,
                     help='learning rate 10x drop schedule (default: [120, 160])')
@@ -49,8 +47,7 @@ parser.add_argument('--wd', '--weight-decay', default=1e-4, type=float,
                     help='weight decay (default: 1e-4)')
 parser.add_argument('--port', default=10001, type=int,
                     help='port used to set up distributed training (default: 10001)')
-parser.add_argument('--save-freq', default=25, type=int,
-                    metavar='FREQ', dest='save_freq',
+parser.add_argument('--save-freq', default=25, type=int, metavar='FREQ', dest='save_freq',
                     help='frequency in epochs to save checkpoints (default: 25)'),
 parser.add_argument('--resume', default='', type=str, metavar='PATH',
                     help='path to resume from checkpoint')
