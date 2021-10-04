@@ -94,13 +94,14 @@ class OutConv(nn.Module):
 
 
 class UNet(nn.Module):
-    NUM_CHANNELS_INC = 128
-
-    def __init__(self, num_channels, num_classes, bilinear=True, half_model=False):
+    def __init__(self, n_channels, channels_inc, labels_id, bilinear=True, half_model=False):
         super(UNet, self).__init__()
+        self.heatmap_labels = labels_id
         self.half_model = half_model
+        num_classes = len(self.heatmap_labels)
+
         # increase the number of channels by a factor of 2 each layer
-        num_channels_down1 = self.NUM_CHANNELS_INC * 2
+        num_channels_down1 = channels_inc * 2
         num_channels_down2 = num_channels_down1 * 2
         num_channels_down3 = num_channels_down2 * 2
         # decrease the number of channels by a factor of 2 each layer
@@ -110,8 +111,8 @@ class UNet(nn.Module):
 
         factor = 2 if bilinear else 1
 
-        self.inc = DoubleConv(num_channels, self.NUM_CHANNELS_INC)
-        self.down1 = Down(self.NUM_CHANNELS_INC, num_channels_down1)
+        self.inc = DoubleConv(n_channels, channels_inc)
+        self.down1 = Down(channels_inc, num_channels_down1)
         self.down2 = Down(num_channels_down1, num_channels_down2)
         self.down3 = Down(num_channels_down2, num_channels_down3 // factor)
 
@@ -139,3 +140,7 @@ class UNet(nn.Module):
             x = self.up3(x, x1)
             logits = self.outc(x)
         return logits
+
+    def output(self, x):
+        return torch.sigmoid(self.forward(x))
+   
