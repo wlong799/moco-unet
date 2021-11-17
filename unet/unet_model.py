@@ -94,7 +94,7 @@ class OutConv(nn.Module):
 
 
 class UNet(nn.Module):
-    def __init__(self, n_channels, channels_inc, labels_id, bilinear=True, half_model=False):
+    def __init__(self, n_channels, channels_inc, labels_id=[], bilinear=True, half_model=False):
         super(UNet, self).__init__()
         self.heatmap_labels = labels_id
         self.half_model = half_model

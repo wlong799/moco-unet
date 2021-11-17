@@ -219,8 +219,11 @@ class COCODataset(torch.utils.data.Dataset):
             self.landmarks = self.landmarks.append(df)
 
         self.im = []
+        new_w, new_h = self.img_xy
         for file in self.img_files:
             im = cv2.imread(file, cv2.IMREAD_GRAYSCALE)
+            h, w = im.shape
+            im = cv2.resize(im, img_xy)
             # convert to float32 in the range 0. to 1.
             if im.dtype == float:
                 pass
@@ -240,8 +243,11 @@ class COCODataset(torch.utils.data.Dataset):
         # Create heatmap target prediction
         self.landmark_heatmaps = []
         for i in range(len(self.im)):
-            # locs: y_pos x x_pos for data augmentation
+            # locs is nlandmarks * 2
+            # (x, y) pos resized to new image size
             locs = np.array([self.landmarks.values[i][::2], self.landmarks.values[i][1::2]]).T
+            locs[:, 0] *= new_w / w
+            locs[:, 1] *= new_h / h
             target = self.make_heatmap_target(locs, np.squeeze(self.im[i]).shape)
             self.landmark_heatmaps.append(target.detach().numpy())
             if self.im[i].ndim < 3:
@@ -322,6 +328,7 @@ class COCODataset(torch.utils.data.Dataset):
                                                       fil_y0:fil_y0 + len(np.arange(y0, y1 + 1)),
                                                       fil_x0:fil_x0 + len(np.arange(x0, x1 + 1))]
                 else:
+                    # print(locs, imsz, x, x0, x1, y, y0, y1)
                     target[i, y0:y1 + 1, x0:x1 + 1] = self.label_filter[fil_y0:fil_y1 + 1,
                                                       fil_x0:fil_x1 + 1]
         return target

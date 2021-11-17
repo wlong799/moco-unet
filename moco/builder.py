@@ -11,6 +11,7 @@ class MoCo(nn.Module):
     Build a MoCo model with: a query encoder, a key encoder, and a queue
     https://arxiv.org/abs/1911.05722
     """
+    CHANNELS_INC = 128
 
     def __init__(self, dim=128, K=65536, m=0.999, T=0.07, mlp=False):
         """
@@ -26,9 +27,9 @@ class MoCo(nn.Module):
         self.T = T
 
         # create the encoders
-        # num_classes is the output fc dimension
-        self.encoder_q = UNet(1, dim, half_model=True)
-        self.encoder_k = UNet(1, dim, half_model=True)
+        # pass in blank labels of length 'dim' to create embedding layer
+        self.encoder_q = UNet(1, self.CHANNELS_INC, [''] * dim, half_model=True)
+        self.encoder_k = UNet(1, self.CHANNELS_INC, [''] * dim, half_model=True)
 
         if mlp:  # hack: brute-force replacement
             dim_mlp = self.encoder_q.fc.weight.shape[1]
