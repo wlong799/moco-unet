@@ -4,19 +4,22 @@ from glob import glob
 
 ROOT_DIR = '/groups/stringer/stringerlab/PoseEstimation/moco_unet/'
 CHECKPOINT_DIR = 'checkpoints'
-DATA_DIR = 'data/supervised/Cam0'
+DATA_DIR = 'data/supervised/longw'
 AUG_FILE = 'aug_params.yml'
 
+LR = 0.001
+EPOCHS = 400
+
 MOCO_PREFIX = 'moco_unet'
-SAVE_PREFIX = 'unet_pretrained'
+SAVE_PREFIX = f'unet_pretrained_longw_{LR}_{EPOCHS}'
 CHECKPOINT_NAME = 'checkpoint_0200.pth.tar'
 
 
 def main():
     os.chdir(ROOT_DIR)
 
-    base_bsub_command = f'bsub -n 4 -gpu "num=1" -q gpu_rtx -W 480'
-    base_python_command = f'python code/main_unet.py --batch-size 8 --epochs 100'
+    base_bsub_command = f'bsub -n 4 -gpu "num=1" -q gpu_rtx -W 240'
+    base_python_command = f'python code/main_unet.py --batch-size 8 --lr {LR} --epochs {EPOCHS}'
     
     model_paths = glob(os.path.join(CHECKPOINT_DIR, f'{MOCO_PREFIX}*'))
     save_dirs = []
